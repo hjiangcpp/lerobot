@@ -68,11 +68,11 @@
   "mode": "record",
   "repo_id": "./hilserl_so101_090125",
   "dataset_root": null,
-  "task": "push object",
+  "task": "push object to target position",
   "num_episodes": 2,
   "episode": 0,
   "pretrained_policy_name_or_path": null,
-  "device": "cpu",
+  "device": "cuda",
   "push_to_hub": true,
   "fps": 10,
   "features": {
