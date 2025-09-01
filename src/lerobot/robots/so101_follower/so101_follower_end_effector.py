@@ -1,4 +1,4 @@
-# !/usr/bin/env python
+#!/usr/bin/env python
 
 # Copyright 2025 The HuggingFace Inc. team. All rights reserved.
 #
@@ -20,13 +20,13 @@ from typing import Any
 
 import numpy as np
 
-from lerobot.cameras import make_cameras_from_configs
+from lerobot.cameras.utils import make_cameras_from_configs
 from lerobot.errors import DeviceNotConnectedError
 from lerobot.model.kinematics import RobotKinematics
 from lerobot.motors import Motor, MotorNormMode
 from lerobot.motors.feetech import FeetechMotorsBus
 
-from . import SO101Follower
+from .so101_follower import SO101Follower
 from .config_so101_follower import SO101FollowerEndEffectorConfig
 
 logger = logging.getLogger(__name__)
@@ -36,8 +36,8 @@ class SO101FollowerEndEffector(SO101Follower):
     """
     SO101Follower robot with end-effector space control.
 
-    This robot inherits from SO101Follower but transforms actions from
-    end-effector space to joint space before sending them to the motors.
+    Inherits joint-space behavior from SO101Follower and adds forward/inverse
+    kinematics to convert end-effector deltas to joint positions.
     """
 
     config_class = SO101FollowerEndEffectorConfig
@@ -45,6 +45,8 @@ class SO101FollowerEndEffector(SO101Follower):
 
     def __init__(self, config: SO101FollowerEndEffectorConfig):
         super().__init__(config)
+
+        # Override bus to ensure degree-based normalization for EE control
         self.bus = FeetechMotorsBus(
             port=self.config.port,
             motors={
@@ -60,13 +62,9 @@ class SO101FollowerEndEffector(SO101Follower):
 
         self.cameras = make_cameras_from_configs(config.cameras)
 
-        self.config = config
-
-        # Initialize the kinematics module for the so101 robot
         if self.config.urdf_path is None:
             raise ValueError(
-                "urdf_path must be provided in the configuration for end-effector control. "
-                "Please set urdf_path in your SO101FollowerEndEffectorConfig."
+                "urdf_path must be provided in the configuration for end-effector control."
             )
 
         self.kinematics = RobotKinematics(
@@ -74,7 +72,6 @@ class SO101FollowerEndEffector(SO101Follower):
             target_frame_name=self.config.target_frame_name,
         )
 
-        # Store the bounds for end-effector position
         self.end_effector_bounds = self.config.end_effector_bounds
 
         self.current_ee_pos = None
@@ -82,10 +79,6 @@ class SO101FollowerEndEffector(SO101Follower):
 
     @property
     def action_features(self) -> dict[str, Any]:
-        """
-        Define action features for end-effector control.
-        Returns dictionary with dtype, shape, and names.
-        """
         return {
             "dtype": "float32",
             "shape": (4,),
@@ -93,21 +86,20 @@ class SO101FollowerEndEffector(SO101Follower):
         }
 
     def send_action(self, action: dict[str, Any]) -> dict[str, Any]:
-        """
-        Transform action from end-effector space to joint space and send to motors.
-
-        Args:
-            action: Dictionary with keys 'delta_x', 'delta_y', 'delta_z' for end-effector control
-                   or a numpy array with [delta_x, delta_y, delta_z]
-
-        Returns:
-            The joint-space action that was sent to the motors
-        """
+        ###########################################################
+        # Debugging
+        ###########################################################
+        print(f"~~~~~~~~~~debug send_action for so_101_follower_end_effector {action}")
+        # Check if this is a joint space action (from teleoperator)
+        if isinstance(action, dict) and any(key.endswith('.pos') for key in action.keys()):
+            # This is a joint space action, pass it directly to parent class
+            return super().send_action(action)
+        ###########################################################
 
         if not self.is_connected:
             raise DeviceNotConnectedError(f"{self} is not connected.")
 
-        # Convert action to numpy array if not already
+        # Convert dict action with deltas to numpy array
         if isinstance(action, dict):
             if all(k in action for k in ["delta_x", "delta_y", "delta_z"]):
                 delta_ee = np.array(
@@ -128,40 +120,30 @@ class SO101FollowerEndEffector(SO101Follower):
                 action = np.zeros(4, dtype=np.float32)
 
         if self.current_joint_pos is None:
-            # Read current joint positions
-            current_joint_pos = self.bus.sync_read("Present_Position")
-            self.current_joint_pos = np.array([current_joint_pos[name] for name in self.bus.motors])
+            present = self.bus.sync_read("Present_Position")
+            self.current_joint_pos = np.array([float(present[name]) for name in present], dtype=np.float64)
 
-        # Calculate current end-effector position using forward kinematics
         if self.current_ee_pos is None:
             self.current_ee_pos = self.kinematics.forward_kinematics(self.current_joint_pos)
 
-        # Set desired end-effector position by adding delta
         desired_ee_pos = np.eye(4)
-        desired_ee_pos[:3, :3] = self.current_ee_pos[:3, :3]  # Keep orientation
-
-        # Add delta to position and clip to bounds
+        desired_ee_pos[:3, :3] = self.current_ee_pos[:3, :3]
         desired_ee_pos[:3, 3] = self.current_ee_pos[:3, 3] + action[:3]
+
         if self.end_effector_bounds is not None:
             desired_ee_pos[:3, 3] = np.clip(
-                desired_ee_pos[:3, 3],
-                self.end_effector_bounds["min"],
-                self.end_effector_bounds["max"],
+                desired_ee_pos[:3, 3], self.end_effector_bounds["min"], self.end_effector_bounds["max"]
             )
 
-        # Compute inverse kinematics to get joint positions
         target_joint_values_in_degrees = self.kinematics.inverse_kinematics(
             self.current_joint_pos, desired_ee_pos
         )
 
-        # Create joint space action dictionary
         joint_action = {
             f"{key}.pos": target_joint_values_in_degrees[i] for i, key in enumerate(self.bus.motors.keys())
         }
 
-        # Handle gripper separately if included in action
-        # Gripper delta action is in the range 0 - 2,
-        # We need to shift the action to the range -1, 1 so that we can expand it to -Max_gripper_pos, Max_gripper_pos
+        # Gripper handling
         joint_action["gripper.pos"] = np.clip(
             self.current_joint_pos[-1] + (action[-1] - 1) * self.config.max_gripper_pos,
             5,
@@ -172,26 +154,19 @@ class SO101FollowerEndEffector(SO101Follower):
         self.current_joint_pos = target_joint_values_in_degrees.copy()
         self.current_joint_pos[-1] = joint_action["gripper.pos"]
 
-        # Send joint space action to parent class
         return super().send_action(joint_action)
 
     def get_observation(self) -> dict[str, Any]:
         if not self.is_connected:
             raise DeviceNotConnectedError(f"{self} is not connected.")
 
-        # Read arm position
         start = time.perf_counter()
         obs_dict = self.bus.sync_read("Present_Position")
         obs_dict = {f"{motor}.pos": val for motor, val in obs_dict.items()}
-        dt_ms = (time.perf_counter() - start) * 1e3
-        logger.debug(f"{self} read state: {dt_ms:.1f}ms")
+        _ = (time.perf_counter() - start) * 1e3
 
-        # Capture images from cameras
         for cam_key, cam in self.cameras.items():
-            start = time.perf_counter()
             obs_dict[cam_key] = cam.async_read()
-            dt_ms = (time.perf_counter() - start) * 1e3
-            logger.debug(f"{self} read {cam_key}: {dt_ms:.1f}ms")
 
         return obs_dict
 

@@ -1,10 +1,10 @@
 {
   "type": "gym_manipulator",
   "robot": {
-    "type": "so100_follower_end_effector",
+    "type": "so101_follower_end_effector",
     "id": "my_awesome_follower_arm",
     "port": "/dev/ttyACM3",
-    "urdf_path": "/Users/huanhuanjiang/lerobot/SO-ARM100/Simulation/SO101/so101_new_calib.urdf",
+    "urdf_path": "/home/hhjiang/Documents/lerobot/SO-ARM100/Simulation/SO101/so101_new_calib.urdf",
     "target_frame_name": "gripper_frame_link",
     "cameras": {
       "top": {
@@ -16,14 +16,14 @@
       },
       "hand": {
         "type": "opencv",
-        "index_or_path": 0,
+        "index_or_path": 2,
         "height": 480,
         "width": 640,
         "fps": 60
       },
       "front": {
         "type": "opencv",
-        "index_or_path": 2,
+        "index_or_path": 0,
         "height": 480,
         "width": 640,
         "fps": 30
@@ -66,14 +66,14 @@
     "control_mode": "leader"
   },
   "mode": "record",
-  "repo_id": "./hilserl_so101_090125",
+  "repo_id": "hilserl_so101_090125",
   "dataset_root": null,
-  "task": "push object to target position",
-  "num_episodes": 2,
+  "task": "push object towards left side",
+  "num_episodes": 15,
   "episode": 0,
   "pretrained_policy_name_or_path": null,
   "device": "cuda",
-  "push_to_hub": true,
+  "push_to_hub": false,
   "fps": 10,
   "features": {
     "observation.images.front": {
