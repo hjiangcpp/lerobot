@@ -1,0 +1,108 @@
+{
+  "type": "gym_manipulator",
+  "robot": {
+    "type": "so100_follower_end_effector",
+    "id": "my_awesome_follower_arm",
+    "port": "/dev/ttyACM3",
+    "urdf_path": "/Users/huanhuanjiang/lerobot/SO-ARM100/Simulation/SO101/so101_new_calib.urdf",
+    "target_frame_name": "gripper_frame_link",
+    "cameras": {
+      "top": {
+        "type": "opencv",
+        "index_or_path": 4,
+        "height": 480,
+        "width": 640,
+        "fps": 30
+      },
+      "hand": {
+        "type": "opencv",
+        "index_or_path": 0,
+        "height": 480,
+        "width": 640,
+        "fps": 60
+      },
+      "front": {
+        "type": "opencv",
+        "index_or_path": 2,
+        "height": 480,
+        "width": 640,
+        "fps": 30
+      }
+    },
+    "end_effector_bounds": {
+      "min": [0.082, -0.241, -0.0214],
+      "max": [0.4467, 0.1464, 0.2888]
+    },
+    "end_effector_step_sizes": {
+      "x": 0.025,
+      "y": 0.025,
+      "z": 0.025
+    }
+  },
+  "teleop": {
+    "type": "so101_leader",
+    "port": "/dev/ttyACM2",
+    "id": "my_awesome_leader_arm",
+    "use_degrees": true
+  },
+  "wrapper": {
+    "display_cameras": false,
+    "add_joint_velocity_to_observation": true,
+    "add_current_to_observation": true,
+    "add_ee_pose_to_observation": true,
+    "crop_params_dict": {
+      "observation.images.front": [0, 0, 480, 640],
+      "observation.images.hand": [0, 0, 480, 640],
+      "observation.images.top": [0, 0, 480, 640]
+    },
+    "resize_size": [128, 128],
+    "control_time_s": 40.0,
+    "use_gripper": true,
+    "gripper_quantization_threshold": null,
+    "gripper_penalty": -0.02,
+    "gripper_penalty_in_reward": false,
+    "fixed_reset_joint_positions": [0.0, 0.0, 0.0, 90.0, 0.0, 60.0],
+    "reset_time_s": 2.5,
+    "control_mode": "leader"
+  },
+  "mode": "record",
+  "repo_id": "./hilserl_so101_090125",
+  "dataset_root": null,
+  "task": "push object",
+  "num_episodes": 2,
+  "episode": 0,
+  "pretrained_policy_name_or_path": null,
+  "device": "cpu",
+  "push_to_hub": true,
+  "fps": 10,
+  "features": {
+    "observation.images.front": {
+      "type": "VISUAL",
+      "shape": [3, 128, 128]
+    },
+    "observation.images.hand": {
+      "type": "VISUAL",
+      "shape": [3, 128, 128]
+    },
+    "observation.images.top": {
+      "type": "VISUAL",
+      "shape": [3, 128, 128]
+    },
+    "observation.state": {
+      "type": "STATE",
+      "shape": [15]
+    },
+    "action": {
+      "type": "ACTION",
+      "shape": [3]
+    }
+  },
+  "features_map": {
+    "observation.images.front": "observation.images.side",
+    "observation.images.hand": "observation.images.hand",
+    "observation.images.top": "observation.images.top",
+    "observation.state": "observation.state",
+    "action": "action"
+  },
+  "reward_classifier_pretrained_path": null
+}
