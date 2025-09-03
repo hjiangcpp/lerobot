@@ -221,6 +221,11 @@ def wrap(config_path: Path | None = None):
                     cli_args = filter_arg("config_path", cli_args)
                     cfg = argtype.from_pretrained(config_path_cli, cli_args=cli_args)
                 else:
+                    # Ensure all robot configurations are imported before parsing
+                    try:
+                        from lerobot.robots import so101_follower  # noqa: F401
+                    except ImportError:
+                        pass
                     cfg = draccus.parse(config_class=argtype, config_path=config_path, args=cli_args)
             response = fn(cfg, *args, **kwargs)
             return response

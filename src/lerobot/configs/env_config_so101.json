@@ -66,10 +66,10 @@
     "control_mode": "leader"
   },
   "mode": "record",
-  "repo_id": "hilserl_rc_so101_090125_2",
+  "repo_id": "hilserl_rc_test_so101_090325_3",
   "dataset_root": null,
   "task": "push object towards left side",
-  "num_episodes": 5,
+  "num_episodes": 10,
   "episode": 0,
   "number_of_steps_after_success": 10,
   "pretrained_policy_name_or_path": null,
@@ -81,7 +81,7 @@
       "type": "VISUAL",
       "shape": [3, 128, 128]
     },
-    "observation.images.hand": {
+    "observation.images.hand": { 
       "type": "VISUAL",
       "shape": [3, 128, 128]
     },
@@ -105,5 +105,6 @@
     "observation.state": "observation.state",
     "action": "action"
   },
-  "reward_classifier_pretrained_path": null
+  "reward_classifier_pretrained_path": "./outputs/train/2025-09-01/20-50-19_reward-classifier/checkpoints/last/pretrained_model"
 }
+ 

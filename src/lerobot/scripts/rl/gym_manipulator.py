@@ -1249,48 +1249,55 @@ class BaseLeaderControlWrapper(gym.Wrapper):
         Returns:
             Tuple of (modified_action, intervention_action).
         """
-        if self.leader_torque_enabled:
-            self.robot_leader.bus.sync_write("Torque_Enable", 0)
-            self.leader_torque_enabled = False
+        try:
+            if self.leader_torque_enabled:
+                self.robot_leader.bus.sync_write("Torque_Enable", 0)
+                self.leader_torque_enabled = False
 
-        leader_pos_dict = self.robot_leader.bus.sync_read("Present_Position")
-        follower_pos_dict = self.robot_follower.bus.sync_read("Present_Position")
+            leader_pos_dict = self.robot_leader.bus.sync_read("Present_Position")
+            follower_pos_dict = self.robot_follower.bus.sync_read("Present_Position")
 
-        leader_pos = np.array([leader_pos_dict[name] for name in leader_pos_dict])
-        follower_pos = np.array([follower_pos_dict[name] for name in follower_pos_dict])
+            leader_pos = np.array([leader_pos_dict[name] for name in leader_pos_dict])
+            follower_pos = np.array([follower_pos_dict[name] for name in follower_pos_dict])
 
-        self.leader_tracking_error_queue.append(np.linalg.norm(follower_pos[:-1] - leader_pos[:-1]))
+            self.leader_tracking_error_queue.append(np.linalg.norm(follower_pos[:-1] - leader_pos[:-1]))
 
-        # [:3, 3] Last column of the transformation matrix corresponds to the xyz translation
-        leader_ee = self.kinematics.forward_kinematics(leader_pos)[:3, 3]
-        follower_ee = self.kinematics.forward_kinematics(follower_pos)[:3, 3]
+            # [:3, 3] Last column of the transformation matrix corresponds to the xyz translation
+            leader_ee = self.kinematics.forward_kinematics(leader_pos)[:3, 3]
+            follower_ee = self.kinematics.forward_kinematics(follower_pos)[:3, 3]
 
-        action = np.clip(leader_ee - follower_ee, -self.end_effector_step_sizes, self.end_effector_step_sizes)
-        # Normalize the action to the range [-1, 1]
-        action = action / self.end_effector_step_sizes
+            action = np.clip(leader_ee - follower_ee, -self.end_effector_step_sizes, self.end_effector_step_sizes)
+            # Normalize the action to the range [-1, 1]
+            action = action / self.end_effector_step_sizes
 
-        if self.use_gripper:
-            if self.prev_leader_gripper is None:
-                self.prev_leader_gripper = np.clip(
-                    leader_pos[-1], 0, self.robot_follower.config.max_gripper_pos
-                )
+            if self.use_gripper:
+                if self.prev_leader_gripper is None:
+                    self.prev_leader_gripper = np.clip(
+                        leader_pos[-1], 0, self.robot_follower.config.max_gripper_pos
+                    )
 
-            # Get gripper action delta based on leader pose
-            leader_gripper = leader_pos[-1]
-            gripper_delta = leader_gripper - self.prev_leader_gripper
+                # Get gripper action delta based on leader pose
+                leader_gripper = leader_pos[-1]
+                gripper_delta = leader_gripper - self.prev_leader_gripper
 
-            # Normalize by max angle and quantize to {0,1,2}
-            normalized_delta = gripper_delta / self.robot_follower.config.max_gripper_pos
-            if normalized_delta >= 0.3:
-                gripper_action = 2
-            elif normalized_delta <= 0.1:
-                gripper_action = 0
-            else:
-                gripper_action = 1
+                # Normalize by max angle and quantize to {0,1,2}
+                normalized_delta = gripper_delta / self.robot_follower.config.max_gripper_pos
+                if normalized_delta >= 0.3:
+                    gripper_action = 2
+                elif normalized_delta <= 0.1:
+                    gripper_action = 0
+                else:
+                    gripper_action = 1
 
-            action = np.append(action, gripper_action)
+                action = np.append(action, gripper_action)
 
-        return action
+            return action
+            
+        except ConnectionError as e:
+            logging.warning(f"Leader robot communication failed during intervention: {e}")
+            logging.warning("Falling back to original policy action. Check leader robot connection.")
+            # Return the original action if leader communication fails
+            return action
 
     def _handle_leader_teleoperation(self):
         """
@@ -1299,22 +1306,29 @@ class BaseLeaderControlWrapper(gym.Wrapper):
         This method synchronizes the leader robot position with the follower.
         """
 
-        prev_leader_pos_dict = self.robot_leader.bus.sync_read("Present_Position")
-        prev_leader_pos = np.array(
-            [prev_leader_pos_dict[name] for name in prev_leader_pos_dict], dtype=np.float32
-        )
+        try:
+            prev_leader_pos_dict = self.robot_leader.bus.sync_read("Present_Position")
+            prev_leader_pos = np.array(
+                [prev_leader_pos_dict[name] for name in prev_leader_pos_dict], dtype=np.float32
+            )
 
-        if not self.leader_torque_enabled:
-            self.robot_leader.bus.sync_write("Torque_Enable", 1)
-            self.leader_torque_enabled = True
+            if not self.leader_torque_enabled:
+                self.robot_leader.bus.sync_write("Torque_Enable", 1)
+                self.leader_torque_enabled = True
 
-        follower_pos_dict = self.robot_follower.bus.sync_read("Present_Position")
-        follower_pos = np.array([follower_pos_dict[name] for name in follower_pos_dict], dtype=np.float32)
+            follower_pos_dict = self.robot_follower.bus.sync_read("Present_Position")
+            follower_pos = np.array([follower_pos_dict[name] for name in follower_pos_dict], dtype=np.float32)
 
-        goal_pos = {f"{motor}": follower_pos[i] for i, motor in enumerate(self.robot_leader.bus.motors)}
-        self.robot_leader.bus.sync_write("Goal_Position", goal_pos)
+            goal_pos = {f"{motor}": follower_pos[i] for i, motor in enumerate(self.robot_leader.bus.motors)}
+            self.robot_leader.bus.sync_write("Goal_Position", goal_pos)
 
-        self.leader_tracking_error_queue.append(np.linalg.norm(follower_pos[:-1] - prev_leader_pos[:-1]))
+            self.leader_tracking_error_queue.append(np.linalg.norm(follower_pos[:-1] - prev_leader_pos[:-1]))
+            
+        except ConnectionError as e:
+            logging.warning(f"Leader robot communication failed: {e}")
+            logging.warning("Skipping leader teleoperation for this step. Check leader robot connection.")
+            # Continue without leader teleoperation to prevent system from getting stuck
+            return
 
     def step(self, action):
         """
@@ -1344,11 +1358,16 @@ class BaseLeaderControlWrapper(gym.Wrapper):
         info["is_intervention"] = is_intervention
         info["action_intervention"] = action
 
-        self.prev_leader_gripper = np.clip(
-            self.robot_leader.bus.sync_read("Present_Position")["gripper"],
-            0,
-            self.robot_follower.config.max_gripper_pos,
-        )
+        try:
+            self.prev_leader_gripper = np.clip(
+                self.robot_leader.bus.sync_read("Present_Position")["gripper"],
+                0,
+                self.robot_follower.config.max_gripper_pos,
+            )
+        except ConnectionError as e:
+            logging.warning(f"Failed to read leader gripper position: {e}")
+            # Keep the previous gripper position if communication fails
+            pass
 
         # Check for success or manual termination
         success = self.keyboard_events["episode_success"]
