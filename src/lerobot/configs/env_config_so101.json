@@ -66,10 +66,10 @@
     "control_mode": "leader"
   },
   "mode": "record",
-  "repo_id": "hilserl_rc_test_so101_090325_3",
+  "repo_id": "hilserl_hd_so101_090325",
   "dataset_root": null,
   "task": "push object towards left side",
-  "num_episodes": 10,
+  "num_episodes": 5,
   "episode": 0,
   "number_of_steps_after_success": 10,
   "pretrained_policy_name_or_path": null,
@@ -99,7 +99,7 @@
     }
   },
   "features_map": {
-    "observation.images.front": "observation.images.side",
+    "observation.images.front": "observation.images.front",
     "observation.images.hand": "observation.images.hand",
     "observation.images.top": "observation.images.top",
     "observation.state": "observation.state",
